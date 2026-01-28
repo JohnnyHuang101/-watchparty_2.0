@@ -28,6 +28,9 @@
         const socket = new WebSocket("ws://localhost:8080/ws");
         const video = document.getElementById("myVideo");
         const chatBox = document.getElementById("chat-box");
+
+        let myUsername = null;
+
         let isRemoteChange = false;
 
         // --- 1. SENDING EVENTS (User Interactions) ---
@@ -62,14 +65,20 @@
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
 
+            if (data.type === "identity") {
+                myUsername = data.username;
+                chatBox.innerHTML += `<p class="system-msg">You are <b>${myUsername}</b></p>`;
+                return;
+            }
+
             // A. Handle Video Sync Messages
             if (data.type === "play" || data.type === "pause" || data.type === "seek") {
                 handleVideoSync(data);
             } 
             // B. Handle Chat Messages (Assuming undefined type is chat, or explicit "chat" type)
-            else if (data.username) { 
-                chatBox.innerHTML += `<p><b>${data.username}:</b> ${data.content}</p>`;
-                chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to bottom
+            else if (data.type === "chat") {
+                chatBox.innerHTML += `<p><b>${myUsername}:</b> ${data.content}</p>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
             }
         };
 

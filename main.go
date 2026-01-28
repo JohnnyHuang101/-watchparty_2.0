@@ -9,20 +9,23 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// 1. Configure the Upgrader
-// This validates the handshake. CheckOrigin is crucial for CORS (local dev).
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all connections (change for production!)
-	},
+
+type Client struct {
+    Connected bool
+    Name      string
 }
 
-// 2. Define a "Thread-Safe" Store for Users
-var (
-	clients   = make(map[*websocket.Conn]bool) // Key: Connection, Value: Connected Status
-	broadcast = make(chan Message)             // Broadcast channel
-	mutex     = sync.Mutex{}                   // Protects the clients map
-)
+
+func randomName() string {
+    rand.Seed(time.Now().UnixNano())
+    return fmt.Sprintf(
+        "%s%s-%04d",
+        adjectives[rand.Intn(len(adjectives))],
+        animals[rand.Intn(len(animals))],
+        rand.Intn(10000),
+    )
+}
+
 
 // Define what a message looks like
 type Message struct {
@@ -33,6 +36,31 @@ type Message struct {
 }
 
 func main() {
+
+
+	var upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true // Allow all connections (change for production!)
+		},
+	}
+	var (
+		clients = make(map[*websocket.Conn]*Client) // Key: Connection, Value: Connected Status
+		broadcast = make(chan Message)             // Broadcast channel
+		mutex     = sync.Mutex{}                   // Protects the clients map
+	)
+	
+	var adjectives = []string{
+		"Bouncy", "Sneaky", "Cosmic", "Wiggly", "Fuzzy",
+		"Chaotic", "Sleepy", "Spicy", "Glorious", "Turbo",
+	}
+	
+	var animals = []string{
+		"Panda", "Otter", "Raccoon", "Axolotl", "Ferret",
+		"Penguin", "Sloth", "Capybara", "Platypus", "Lemur",
+	}
+
+
+
 	// 1. Serve the Frontend
 	// This tells Go to look for an "index.html" inside the "./public" folder
 	fs := http.FileServer(http.Dir("./public"))
@@ -62,10 +90,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	// Register the new client
 	mutex.Lock()
-	clients[ws] = true
+	clients[ws] = randomName()
 	mutex.Unlock()
 	fmt.Println("New Client Connected")
 
+	conn.WriteJSON(Message{
+		Type:     "identity",
+		Username: client.Name,
+	})
+	
 	// Cleanup when function returns (user disconnects)
 	defer func() {
 		mutex.Lock()
