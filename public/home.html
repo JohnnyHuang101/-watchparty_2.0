@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Go Watch Party</title>
+    <style>
+        /* Simple styling to make it look decent */
+        #chat-box { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-top: 10px;}
+        video { width: 100%; max-width: 600px; margin-top: 20px; }
+        .system-msg { color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h2>🎥 Watchparty Chat</h2>
+    
+    <video id="myVideo" controls>
+        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <br><br>
+    
+    <input id="msg" type="text" placeholder="Type message..." style="width: 70%;">
+    <button onclick="send()">Send</button>
+    
+    <div id="chat-box"></div>
+
+    <script>
+        const socket = new WebSocket("ws://localhost:8080/ws");
+        const video = document.getElementById("myVideo");
+        const chatBox = document.getElementById("chat-box");
+        let isRemoteChange = false;
+
+        // --- 1. SENDING EVENTS (User Interactions) ---
+
+        video.addEventListener('play', () => {
+            if (isRemoteChange) return; 
+            sendSignal("play", video.currentTime);
+        });
+
+        video.addEventListener('pause', () => {
+            if (isRemoteChange) return;
+            sendSignal("pause", video.currentTime);
+        });
+
+        video.addEventListener('seeked', () => {
+            if (isRemoteChange) return;
+            sendSignal("seek", video.currentTime);
+        });
+
+        function sendSignal(type, time) {
+            // Only send if connection is open
+            if(socket.readyState === WebSocket.OPEN){
+                socket.send(JSON.stringify({
+                    type: type,
+                    video_time: time
+                }));
+            }
+        }
+
+        // --- 2. THE COMBINED RECEIVER (Fixing the Bug) ---
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            // A. Handle Video Sync Messages
+            if (data.type === "play" || data.type === "pause" || data.type === "seek") {
+                handleVideoSync(data);
+            } 
+            // B. Handle Chat Messages (Assuming undefined type is chat, or explicit "chat" type)
+            else if (data.username) { 
+                chatBox.innerHTML += `<p><b>${data.username}:</b> ${data.content}</p>`;
+                chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to bottom
+            }
+        };
+
+        function handleVideoSync(msg) {
+            if (msg.type === "play") {
+                isRemoteChange = true;
+                if (Math.abs(video.currentTime - msg.video_time) > 0.5) {
+                    video.currentTime = msg.video_time; 
+                }
+                video.play().then(() => {
+                    setTimeout(() => isRemoteChange = false, 50); 
+                });
+
+            } else if (msg.type === "pause") {
+                isRemoteChange = true;
+                video.pause();
+                video.currentTime = msg.video_time; 
+                setTimeout(() => isRemoteChange = false, 50);
+
+            } else if (msg.type === "seek") {
+                isRemoteChange = true;
+                video.currentTime = msg.video_time;
+                setTimeout(() => isRemoteChange = false, 50);
+            }
+        }
+
+        // --- 3. CONNECTION SETUP ---
+
+        socket.onopen = () => console.log("Connected to Go Server");
+        
+        function send() {
+            const input = document.getElementById("msg");
+            if (!input.value) return;
+
+            const payload = {
+                type: "chat", // Good practice to be explicit
+                username: "User " + Math.floor(Math.random() * 100),
+                content: input.value
+            };
+            socket.send(JSON.stringify(payload));
+            input.value = "";
+        }
+    </script>
+</body>
+</html>
