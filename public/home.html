@@ -115,7 +115,7 @@
 
             const payload = {
                 type: "chat", // Good practice to be explicit
-                username: "User " + Math.floor(Math.random() * 100),
+                username: myUsername,
                 content: input.value
             };
             socket.send(JSON.stringify(payload));
