@@ -25,7 +25,9 @@
     <div id="chat-box"></div>
 
     <script>
-        const socket = new WebSocket("ws://localhost:8080/ws");
+        const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+        const socket = new WebSocket(protocol + location.host + "/ws");
+
         const video = document.getElementById("myVideo");
         const chatBox = document.getElementById("chat-box");
 
@@ -77,7 +79,7 @@
             } 
             // B. Handle Chat Messages (Assuming undefined type is chat, or explicit "chat" type)
             else if (data.type === "chat") {
-                chatBox.innerHTML += `<p><b>${myUsername}:</b> ${data.content}</p>`;
+                chatBox.innerHTML += `<p><b>${data.username}:</b> ${data.content}</p>`;
                 chatBox.scrollTop = chatBox.scrollHeight;
             }
         };
