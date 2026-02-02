@@ -242,7 +242,9 @@
     </div>
 
     <script>
-        const socket = new WebSocket("ws://localhost:8080/ws");
+        const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+        const socket = new WebSocket(protocol + location.host + "/ws");
+
         const video = document.getElementById("myVideo");
         const chatBox = document.getElementById("chat-box");
         const inputField = document.getElementById("msg");
