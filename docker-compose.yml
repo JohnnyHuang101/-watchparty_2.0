@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # --- Central NATS Messaging Infrastructure ---
+  nats-broker:
+    image: nats:2.10-alpine
+    container_name: nats-cluster-broker
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - watchparty-network
+
+  # --- Watchparty App Node 1 ---
+  watchparty-node-1:
+    build: .
+    container_name: watchparty-app-1
+    # Ports removed to force traffic through Nginx
+    environment:
+      - SERVER_NAME=NODE_ONE
+      - NATS_URL=nats://nats-broker:4222
+    volumes:
+      - ./public:/public # Maps your windows folder directly over the container's root public folder
+    depends_on:
+      - nats-broker
+    networks:
+      - watchparty-network
+
+  # --- Watchparty App Node 2 ---
+  watchparty-node-2:
+    build: .
+    container_name: watchparty-app-2
+    # Ports removed to force traffic through Nginx
+    environment:
+      - SERVER_NAME=NODE_TWO
+      - NATS_URL=nats://nats-broker:4222
+    volumes:
+      - ./public:/public # Maps your windows folder directly over the container's root public folder
+    depends_on:
+      - nats-broker
+    networks:
+      - watchparty-network
+
+  # --- Nginx Load Balancer Gateway ---
+  load-balancer:
+    image: nginx:alpine
+    container_name: watchparty-load-balancer
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro # Mounts your routing rules configuration file as read-only
+    ports:
+      - "8080:80" # Exposed to your local host laptop machine
+    depends_on:
+      - watchparty-node-1
+      - watchparty-node-2
+    networks:
+      - watchparty-network
+
+networks:
+  watchparty-network:
+    driver: bridge

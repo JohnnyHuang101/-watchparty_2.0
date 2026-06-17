@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,7 +11,7 @@
             --bg-gradient: linear-gradient(315deg, #0f0c29 0%, #302b63 74%, #24243e 100%);
             --glass-bg: rgba(255, 255, 255, 0.05);
             --glass-border: rgba(255, 255, 255, 0.1);
-            --accent-color: #00f2ff; /* Cyberpunk Cyan */
+            --accent-color: #00f2ff;
             --accent-glow: 0 0 10px rgba(0, 242, 255, 0.5);
             --text-primary: #ffffff;
             --text-secondary: #aaaaaa;
@@ -19,7 +20,11 @@
             --font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
         body {
             font-family: var(--font-family);
@@ -33,21 +38,19 @@
             align-items: center;
         }
 
-        /* --- Main Layout Grid --- */
         .container {
             display: grid;
-            grid-template-columns: 1fr 350px; /* Video takes rest, Chat takes 350px */
+            grid-template-columns: 1fr 350px;
             width: 95vw;
             height: 90vh;
             background: rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             border: 1px solid var(--glass-border);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
             overflow: hidden;
         }
 
-        /* --- Video Section --- */
         .video-section {
             display: flex;
             flex-direction: column;
@@ -73,16 +76,33 @@
             gap: 10px;
         }
 
-        video {
+        .video-container {
             width: 100%;
             max-width: 900px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            outline: none;
-            border: 1px solid #333;
+            aspect-ratio: 16/9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        /* --- Chat Section --- */
+        .placeholder-screen {
+            width: 100%;
+            height: 100%;
+            border: 2px dashed rgba(0, 242, 255, 0.3);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.4);
+            gap: 15px;
+        }
+
+        .placeholder-screen p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
         .chat-section {
             display: flex;
             flex-direction: column;
@@ -108,12 +128,19 @@
             scroll-behavior: smooth;
         }
 
-        /* Custom Scrollbar */
-        #chat-box::-webkit-scrollbar { width: 6px; }
-        #chat-box::-webkit-scrollbar-track { background: transparent; }
-        #chat-box::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+        #chat-box::-webkit-scrollbar {
+            width: 6px;
+        }
 
-        /* --- Messages Styling --- */
+        #chat-box::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #chat-box::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
         .msg {
             padding: 10px 14px;
             border-radius: 10px;
@@ -125,18 +152,26 @@
         }
 
         @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .msg-system {
             align-self: center;
             font-size: 0.8rem;
-            color: var(--text-secondary);
+            color: var(--accent-color);
             font-style: italic;
-            background: rgba(255,255,255,0.05);
+            background: rgba(0, 242, 255, 0.05);
             padding: 4px 12px;
             border-radius: 20px;
+            border: 1px solid rgba(0, 242, 255, 0.2);
         }
 
         .msg-user {
@@ -149,7 +184,7 @@
             background: var(--msg-bg-self);
             align-self: flex-end;
             border-bottom-right-radius: 2px;
-            text-align: right;
+            text-align: left;
             border: 1px solid rgba(0, 242, 255, 0.3);
         }
 
@@ -160,7 +195,6 @@
             display: block;
         }
 
-        /* --- Input Area --- */
         .input-area {
             padding: 20px;
             border-top: 1px solid var(--glass-border);
@@ -173,7 +207,7 @@
             padding: 12px 15px;
             border-radius: 25px;
             border: 1px solid var(--glass-border);
-            background: rgba(0,0,0,0.3);
+            background: rgba(0, 0, 0, 0.3);
             color: white;
             outline: none;
             transition: 0.3s;
@@ -186,6 +220,7 @@
 
         button {
             padding: 0 25px;
+            height: 42px;
             border-radius: 25px;
             border: none;
             background: linear-gradient(135deg, #00f2ff, #00c3ff);
@@ -207,115 +242,246 @@
             transform: scale(0.95);
         }
 
-        /* --- Responsive --- */
+        /* Modal Overlays */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+
+        .modal-content {
+            background: #1a153a;
+            border: 1px solid var(--accent-color);
+            border-radius: 15px;
+            padding: 30px;
+            width: 450px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: var(--accent-glow);
+        }
+
+        .modal-content h3 {
+            color: var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .preview-box {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            border: 1px solid #333;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: none;
+            border-color: white;
+        }
+
         @media (max-width: 900px) {
             .container {
                 grid-template-columns: 1fr;
                 grid-template-rows: 1fr 40%;
             }
-            .video-section { border-right: none; border-bottom: 1px solid var(--glass-border); }
+
+            .video-section {
+                border-right: none;
+                border-bottom: 1px solid var(--glass-border);
+            }
         }
     </style>
 </head>
+
 <body>
 
     <div class="container">
         <section class="video-section">
             <h2><span>🎥</span> Watch Party</h2>
-            <video id="myVideo" controls>
-                <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
+            <div class="video-container" id="mediaContainer">
+                <div class="placeholder-screen" id="placeholderScreen">
+                    <p>No video active in this watch party session</p>
+                    <button onclick="openShareModal()">Share Video Screen</button>
+                </div>
+            </div>
         </section>
 
         <aside class="chat-section">
             <div class="chat-header">LIVE CHAT</div>
-            
-            <div id="chat-box">
-                </div>
-
+            <div id="chat-box"></div>
             <div class="input-area">
                 <input id="msg" type="text" placeholder="Type a message..." autocomplete="off">
-                <button onclick="send()">Send</button>
+                <button onclick="sendChat()">Send</button>
             </div>
         </aside>
+    </div>
+
+    <div class="modal" id="shareModal">
+        <div class="modal-content">
+            <h3>Share Stream Resource</h3>
+            <input type="text" id="videoUrlInput" placeholder="Paste YouTube link...">
+            <div class="preview-box" id="previewBox">No source link provided</div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeShareModal()">Cancel</button>
+                <button onclick="confirmVideoShare()">Broadcast Stream</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const protocol = location.protocol === "https:" ? "wss://" : "ws://";
         const socket = new WebSocket(protocol + location.host + "/ws");
 
-        const video = document.getElementById("myVideo");
+        const mediaContainer = document.getElementById("mediaContainer");
+        const placeholderScreen = document.getElementById("placeholderScreen");
         const chatBox = document.getElementById("chat-box");
         const inputField = document.getElementById("msg");
+
+        const shareModal = document.getElementById("shareModal");
+        const videoUrlInput = document.getElementById("videoUrlInput");
+        const previewBox = document.getElementById("previewBox");
 
         let myUsername = null;
         let isRemoteChange = false;
 
-        // --- UTILS: Generate Cool Colors for Usernames ---
-        function getUsernameColor(username) {
-            let hash = 0;
-            for (let i = 0; i < username.length; i++) {
-                hash = username.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            const h = Math.abs(hash) % 360;
-            return `hsl(${h}, 70%, 65%)`; // Pastel/Neon colors
+        let ytPlayer = null;
+        let ytPlayerReady = false;
+
+        // Initialize YouTube Script Loading Engine
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        // Utility function to extract the 11-character YouTube Video ID
+        function extractYouTubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
         }
 
-        // --- UTILS: Add Message to UI ---
-        function addMessage(type, username, content) {
-            const div = document.createElement("div");
-            
-            if (type === 'system') {
-                div.className = "msg msg-system";
-                div.innerHTML = content;
+        // Single Unified Input Listener handling the visual image background thumbnail update
+        videoUrlInput.addEventListener("input", () => {
+            const url = videoUrlInput.value.trim();
+            const videoId = extractYouTubeId(url);
+
+            if (videoId) {
+                const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                previewBox.style.backgroundImage = `url('${thumbnailUrl}')`;
+                previewBox.innerText = "";
             } else {
-                const isMe = username === myUsername;
-                div.className = `msg ${isMe ? 'msg-self' : 'msg-user'}`;
-                
-                // Don't show name if it's me
-                let nameHtml = "";
-                if (!isMe) {
-                    const color = getUsernameColor(username || "Anon");
-                    nameHtml = `<span class="username" style="color:${color}">${username}</span>`;
-                }
-                
-                div.innerHTML = `${nameHtml}${content}`;
+                previewBox.style.backgroundImage = "none";
+                previewBox.innerText = url ? "Invalid YouTube URL" : "No source link provided";
             }
+        });
 
-            chatBox.appendChild(div);
-            chatBox.scrollTop = chatBox.scrollHeight;
+        function openShareModal() { shareModal.style.display = "flex"; }
+        function closeShareModal() {
+            shareModal.style.display = "none";
+            videoUrlInput.value = "";
+            previewBox.style.backgroundImage = "none";
+            previewBox.innerText = "No source link provided";
         }
 
-        // --- 1. SENDING EVENTS (User Interactions) ---
+        // --- 1. SEND SIGNAL ENVELOPES UP TO GO ACTOR HUB ---
+        function confirmVideoShare() {
+            const targetUrl = videoUrlInput.value.trim();
+            if (!targetUrl) return;
 
-        video.addEventListener('play', () => {
-            if (isRemoteChange) return; 
-            sendSignal("play", video.currentTime);
-        });
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: "video_change",
+                    username: myUsername,
+                    content: targetUrl
+                }));
+            }
+            closeShareModal();
+        }
 
-        video.addEventListener('pause', () => {
-            if (isRemoteChange) return;
-            sendSignal("pause", video.currentTime);
-        });
+        function mountVideoPlayer(sourceUrl) {
+            const videoId = extractYouTubeId(sourceUrl);
+            if (!videoId) {
+                addMessage('system', null, `❌ Failed to mount resource: Invalid YouTube link.`);
+                return;
+            }
 
-        video.addEventListener('seeked', () => {
-            if (isRemoteChange) return;
-            sendSignal("seek", video.currentTime);
-        });
+            mediaContainer.innerHTML = `<div id="ytPlayer" style="width:100%; height:100%; border-radius:12px;"></div>`;
+            ytPlayerReady = false;
+
+            ytPlayer = new YT.Player('ytPlayer', {
+                videoId: videoId,
+                playerVars: {
+                    'autoplay': 0,
+                    'controls': 1,
+                    'rel': 0,
+                    'modestbranding': 1
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            ytPlayerReady = true;
+        }
+
+        // Capture user events directly from YouTube player layer to pipe up to the cluster network
+        function onPlayerStateChange(event) {
+            if (isRemoteChange || !ytPlayerReady || !ytPlayer) return;
+
+            const currentTime = ytPlayer.getCurrentTime();
+
+            if (event.data === YT.PlayerState.PLAYING) {
+                sendSignal("play", currentTime);
+            } else if (event.data === YT.PlayerState.PAUSED) {
+                sendSignal("pause", currentTime);
+            }
+        }
 
         function sendSignal(type, time) {
-            if(socket.readyState === WebSocket.OPEN){
+            if (socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({
                     type: type,
+                    username: myUsername,
                     video_time: time
                 }));
             }
         }
 
-        // --- 2. RECEIVER ---
-
-        socket.onmessage = function(event) {
+        // --- 2. PACKET CONSUMPTION MANAGER (Cluster Consumer Ingress) ---
+        socket.onmessage = function (event) {
             const data = JSON.parse(event.data);
 
             if (data.type === "identity") {
@@ -324,67 +490,101 @@
                 return;
             }
 
-            // A. Handle Video Sync Messages
-            if (data.type === "play" || data.type === "pause" || data.type === "seek") {
+            if (data.type === "user_leave") {
+                addMessage('system', null, data.content);
+                return;
+            }
+
+            if (data.type === "video_change") {
+                mountVideoPlayer(data.content);
+                addMessage('system', null, `🎬 New stream resource active inside party`);
+                return;
+            }
+
+            // Route standard synchronization parameters directly if the player actor instance is active
+            if (["play", "pause", "seek"].includes(data.type)) {
                 handleVideoSync(data);
-            } 
-            // B. Handle Chat Messages
-            else if (data.type === "chat") {
-                // Use data.username to see who sent it (Remote or Me)
-                const senderName = data.username ? data.username : myUsername;
-                addMessage('chat', senderName, data.content);
+            } else if (data.type === "chat") {
+                addMessage('chat', data.username, data.content);
             }
         };
 
         function handleVideoSync(msg) {
+            if (!ytPlayer || !ytPlayerReady) return;
+
+            // Check if the message was originally sent by ME
+            const isMe = msg.username === myUsername;
+
             if (msg.type === "play") {
-                isRemoteChange = true;
-                if (Math.abs(video.currentTime - msg.video_time) > 0.5) {
-                    video.currentTime = msg.video_time; 
+                // Only trigger UI update text if it came from someone else
+                if (!isMe) {
+                    isRemoteChange = true;
+                    if (Math.abs(ytPlayer.getCurrentTime() - msg.video_time) > 0.8) {
+                        ytPlayer.seekTo(msg.video_time, true);
+                    }
+                    ytPlayer.playVideo();
+                    setTimeout(() => isRemoteChange = false, 150);
+                    addMessage('system', null, `▶ Resumed by ${msg.username}`);
                 }
-                video.play().then(() => {
-                    setTimeout(() => isRemoteChange = false, 50); 
-                });
-                addMessage('system', null, `▶ Video resumed`);
 
             } else if (msg.type === "pause") {
-                isRemoteChange = true;
-                video.pause();
-                video.currentTime = msg.video_time; 
-                setTimeout(() => isRemoteChange = false, 50);
-                addMessage('system', null, `⏸ Video paused`);
-
+                if (!isMe) {
+                    isRemoteChange = true;
+                    ytPlayer.pauseVideo();
+                    ytPlayer.seekTo(msg.video_time, true);
+                    setTimeout(() => isRemoteChange = false, 150);
+                    addMessage('system', null, `⏸ Paused by ${msg.username}`);
+                }
             } else if (msg.type === "seek") {
-                isRemoteChange = true;
-                video.currentTime = msg.video_time;
-                setTimeout(() => isRemoteChange = false, 50);
-                // Optional: Don't spam seek messages
+                if (!isMe) {
+                    isRemoteChange = true;
+                    ytPlayer.seekTo(msg.video_time, true);
+                    setTimeout(() => isRemoteChange = false, 150);
+                }
             }
         }
 
-        // --- 3. CONNECTION SETUP ---
-
-        socket.onopen = () => console.log("Connected to Go Server");
-        
-        // Allow "Enter" key to send
-        inputField.addEventListener("keypress", function(event) {
-            if (event.key === "Enter") {
-                send();
-            }
-        });
-
-        function send() {
-            const val = inputField.value;
+        // --- 3. CHAT COMPONENT ROUTING ENGINE ---
+        function sendChat() {
+            const val = inputField.value.trim();
             if (!val) return;
 
-            const payload = {
+            socket.send(JSON.stringify({
                 type: "chat",
                 username: myUsername,
                 content: val
-            };
-            socket.send(JSON.stringify(payload));
+            }));
             inputField.value = "";
         }
+
+        function addMessage(type, username, content) {
+            const div = document.createElement("div");
+            if (type === 'system') {
+                div.className = "msg msg-system";
+                div.innerHTML = content;
+            } else {
+                const isMe = username === myUsername;
+                div.className = `msg ${isMe ? 'msg-self' : 'msg-user'}`;
+                let nameHtml = isMe ? "" : `<span class="username" style="color:${getUsernameColor(username || "Anon")}">${username}</span>`;
+                div.innerHTML = `${nameHtml}${content}`;
+            }
+            chatBox.appendChild(div);
+
+            // Force the scroll adjustment execution right after layout rendering completes
+            requestAnimationFrame(() => {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+        }
+
+        function getUsernameColor(username) {
+            let hash = 0;
+            for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
+            return `hsl(${Math.abs(hash) % 360}, 70%, 65%)`;
+        }
+
+        inputField.addEventListener("keypress", (e) => { if (e.key === "Enter") sendChat(); });
+        socket.onopen = () => console.log("Connected to Go Server Node Network");
     </script>
 </body>
+
 </html>
