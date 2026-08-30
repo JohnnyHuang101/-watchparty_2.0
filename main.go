@@ -18,11 +18,11 @@ type Client struct {
 }
 
 type Message struct {
-	Type         string  `json:"type"` // "identity", "chat", "play", "pause", "seek", "video_change", "user_leave"
+	Type         string  `json:"type"`
 	Username     string  `json:"username"`
-	Content      string  `json:"content"`       // Custom strings or video urls
-	VideoTime    float64 `json:"video_time"`    // Playback sync timestamps
-	SourceServer string  `json:"source_server"` // Origin node verification identifier
+	Content      string  `json:"content"`
+	VideoTime    float64 `json:"video_time"`
+	SourceServer string  `json:"source_server"`
 }
 
 type ActionType int
@@ -31,12 +31,21 @@ const (
 	ActionConnect ActionType = iota
 	ActionDisconnect
 	ActionBroadcast
+	ActionGetState
 )
 
+type RoomState struct {
+	LastVideoTime float64   `json:"last_video_time"`
+	LastAction    string    `json:"last_action"`
+	LastUpdatedBy string    `json:"last_updated_by"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type HubAction struct {
-	Type ActionType
-	Conn *websocket.Conn
-	Msg  Message
+	Type     ActionType
+	Conn     *websocket.Conn
+	Msg      Message
+	RespChan chan RoomState // only populated for ActionGetState
 }
 
 var upgrader = websocket.Upgrader{
@@ -80,7 +89,6 @@ func main() {
 
 	fmt.Printf("[%s] Connected to NATS at %s\n", serverName, natsURL)
 
-	// Static Assets and Templates Router
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/home.html", http.StatusMovedPermanently)
@@ -90,10 +98,17 @@ func main() {
 		fs.ServeHTTP(w, r)
 	})
 
-	// Real-Time Stateful Ingress Pipeline
 	http.HandleFunc("/ws", handleConnections)
 
-	// Spin up detached core engine contexts
+	// Debug/inspection endpoint — safely reads hub-confined state via channel round-trip
+	http.HandleFunc("/debug/state", func(w http.ResponseWriter, r *http.Request) {
+		resp := make(chan RoomState)
+		hubChannel <- HubAction{Type: ActionGetState, RespChan: resp}
+		state := <-resp
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(state)
+	})
+
 	go currentHubManager()
 	go handleNatsMessages()
 
@@ -109,8 +124,15 @@ func main() {
 func currentHubManager() {
 	localClients := make(map[*websocket.Conn]*Client)
 
+	// Confined state — ONLY this goroutine ever reads or writes this.
+	var roomState RoomState
+
 	for action := range hubChannel {
 		switch action.Type {
+
+		case ActionGetState:
+			action.RespChan <- roomState // struct copy — safe to hand out
+
 		case ActionConnect:
 			clientName := randomName()
 			localClients[action.Conn] = &Client{Name: clientName}
@@ -142,12 +164,16 @@ func currentHubManager() {
 			}
 
 		case ActionBroadcast:
-			// Hydrate the incoming message payload with the client's generated name if empty
+			// Update confined room state — safe because only this goroutine touches it,
+			// and this goroutine sees messages in the same order NATS delivered them.
+			roomState.LastVideoTime = action.Msg.VideoTime
+			roomState.LastAction = action.Msg.Type
+			roomState.LastUpdatedBy = action.Msg.Username
+			roomState.UpdatedAt = time.Now()
+
 			for conn, client := range localClients {
 				outboundMsg := action.Msg
 
-				// If the broadcast packet doesn't have an origin handle assigned yet,
-				// fall back to the name tracked inside this node instance's memory context.
 				if outboundMsg.Username == "" && action.Msg.Type == "chat" {
 					outboundMsg.Username = client.Name
 				}
@@ -182,13 +208,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		msg.SourceServer = serverName
 
-		// Broadcast configuration payload execution straight to global cluster broker
 		msgBytes, _ := json.Marshal(msg)
 		nc.Publish(NatsSubject, msgBytes)
 	}
 }
 
 func handleNatsMessages() {
+	// Thin, stateless relay — no shared state touched here.
 	_, err := nc.Subscribe(NatsSubject, func(m *nats.Msg) {
 		var msg Message
 		if err := json.Unmarshal(m.Data, &msg); err != nil {

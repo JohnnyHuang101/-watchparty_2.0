@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o watchparty main.go
 
 # --- Stage 2: Create the absolute minimal runtime image ---
-FROM scratch
+FROM alpine:latest
 
 # Copy the compiled binary from the builder stage
 COPY --from=builder /app/watchparty /watchparty
