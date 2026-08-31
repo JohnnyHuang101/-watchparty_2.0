@@ -1,5 +1,6 @@
 import asyncio
 import websockets
+import aiohttp
 import json
 import time
 import uuid
@@ -40,8 +41,6 @@ class LoadClient:
     async def run(self, duration_s):
         try:
             async with websockets.connect(self.server_url) as ws:
-                # Adjust "type" here to whatever your server expects for joining.
-                # If there's no explicit join message, this line can be removed.
                 await ws.send(
                     build_message(
                         msg_type="identity",
@@ -108,53 +107,165 @@ class LoadClient:
                 self.latencies.append(latency)
 
 
-async def swarm_test(server_url, steps, hold_seconds=60):
+def normalize_state_entry(entry: dict) -> dict:
+    """Strip fields that are *expected* to differ per-instance (wall-clock
+    timestamps) so we're comparing semantic state, not arrival jitter.
+    Keeps last_action / last_updated_by / detail only.
+    """
+    return {
+        "last_action": entry.get("last_action"),
+        "last_updated_by": entry.get("last_updated_by"),
+        "detail": entry.get("detail"),
+    }
+
+
+async def fetch_debug_state(session: aiohttp.ClientSession, url: str):
+    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+        resp.raise_for_status()
+        return await resp.json()
+
+
+async def check_instance_sync(debug_urls: list[str]):
+    """Hits each server instance's /debug/state DIRECTLY (must bypass the LB
+    — round-robin means you can't validate cluster-wide sync through it).
+    Compares the most recent RoomState entry from each instance, ignoring
+    updated_at, and reports which instances (if any) disagree.
+    """
+    if not debug_urls:
+        return {"checked": False, "reason": "no debug_urls provided"}
+
+    async with aiohttp.ClientSession() as session:
+        results = await asyncio.gather(
+            *[fetch_debug_state(session, u) for u in debug_urls],
+            return_exceptions=True,
+        )
+
+    per_instance = {}
+    for url, result in zip(debug_urls, results):
+        if isinstance(result, Exception):
+            per_instance[url] = {"error": str(result)}
+            continue
+        if not result:
+            per_instance[url] = {"error": "empty history"}
+            continue
+        per_instance[url] = {
+            "history_len": len(result),
+            "latest_normalized": normalize_state_entry(result[-1]),
+        }
+
+    reachable = {url: v for url, v in per_instance.items() if "error" not in v}
+
+    if len(reachable) < 2:
+        return {
+            "checked": True,
+            "in_sync": None,
+            "note": "fewer than 2 reachable instances — nothing to compare",
+            "per_instance": per_instance,
+        }
+
+    latest_states = [v["latest_normalized"] for v in reachable.values()]
+    baseline = latest_states[0]
+    in_sync = all(state == baseline for state in latest_states)
+
+    return {
+        "checked": True,
+        "in_sync": in_sync,
+        "per_instance": per_instance,
+    }
+
+
+async def swarm_test(
+    server_urls, steps, debug_urls=None, hold_seconds=60, settle_seconds=3
+):
+    """
+    server_urls: list of ws:// URLs — one per backend instance. With no
+                 Nginx/LB in front, there's nothing to round-robin through,
+                 so the script spreads clients across these URLs itself
+                 (client i connects to server_urls[i % len(server_urls)])
+                 to approximate load-balanced traffic.
+                 If you add an LB back later, just pass a single-item list
+                 pointed at it instead.
+    debug_urls:  list of http:// URLs pointing DIRECTLY at each backend
+                 instance's /debug/state. Required to validate cross-
+                 instance sync.
+    settle_seconds: pause after load stops, before polling /debug/state,
+                 to let NATS propagation/broadcast catch up. Without this
+                 you'll see false "out of sync" results from in-flight
+                 messages, not real bugs.
+    """
     results = {}
+    debug_urls = debug_urls or []
 
     for n in steps:
         print(f"\nRamping to {n} connections, holding for {hold_seconds}s...")
 
         clients = [
-            LoadClient(room_id=f"room-{i % 10}", server_url=server_url)
+            LoadClient(
+                room_id=f"room-{i % 10}",
+                server_url=server_urls[i % len(server_urls)],
+            )
             for i in range(n)
         ]
 
         await asyncio.gather(*[c.run(hold_seconds) for c in clients])
 
         all_latencies = [lat for c in clients for lat in c.latencies]
-        all_states = [c.state for c in clients]
         total_errors = sum(c.errors for c in clients)
 
-        if all_latencies:
-            results[n] = {
-                "samples": len(all_latencies),
-                "p50": statistics.median(all_latencies),
-                "p95": statistics.quantiles(all_latencies, n=100)[94],
-                "p99": statistics.quantiles(all_latencies, n=100)[98],
-                "errors": total_errors,
-                "error_rate": total_errors / n,
-                f"total_requests_for_{n}_clients_chatting": len(all_latencies),
-                "final_state_achieved_sync": True if equals(all_state) else False,
-                "final_state": all_states[0],
-            }
-        else:
-            results[n] = {
-                "samples": 0,
-                "errors": total_errors,
-                "error_rate": total_errors / n,
-                "note": "no latency samples recorded — check message schema/round-trip logic",
-            }
+        step_result = {
+            "samples": len(all_latencies),
+            "errors": total_errors,
+            "error_rate": total_errors / n,
+        }
 
-        print(f"Results for {n} clients: {results[n]}")
+        if all_latencies:
+            step_result.update(
+                {
+                    "p50": statistics.median(all_latencies),
+                    "p95": statistics.quantiles(all_latencies, n=100)[94],
+                    "p99": statistics.quantiles(all_latencies, n=100)[98],
+                }
+            )
+        else:
+            step_result["note"] = (
+                "no latency samples recorded — check message schema/round-trip logic"
+            )
+
+        # Let async broadcast/NATS propagation settle before checking sync,
+        # otherwise you're measuring propagation lag, not real drift.
+        await asyncio.sleep(settle_seconds)
+        step_result["sync"] = await check_instance_sync(debug_urls)
+
+        results[n] = step_result
+        print(f"Results for {n} clients: {step_result}")
 
     return results
 
 
 if __name__ == "__main__":
+    # NOTE: there is currently no Nginx/LB service in the compose file, so
+    # clients connect straight to each app node. This script (running as
+    # the `loadtester` service on `watchparty-network`) reaches them via
+    # Docker's embedded DNS using their container_name, on the container-
+    # internal port 8080 — nothing needs to be published to the host.
+    # If you add the Nginx LB back, replace server_urls with a single-item
+    # list pointed at it (e.g. ["ws://load-balancer/ws"]).
     asyncio.run(
         swarm_test(
-            "ws://localhost:8080/ws",  # <-- replace with your actual server URL
-            steps=[10],  # [100, 500, 1000, 2500, 5000],
+            # Real traffic goes through Nginx, same as production would —
+            # this is a single-item list so every client connects here and
+            # gets round-robined by Nginx itself, not by this script.
+            server_urls=[
+                "ws://load-balancer/ws",  # internal service name, Nginx's container-internal port 80
+            ],
+            # Debug checks bypass Nginx entirely and hit each node directly,
+            # since the whole point is comparing raw per-instance state.
+            debug_urls=[
+                "http://watchparty-app-1:8080/debug/state",
+                "http://watchparty-app-2:8080/debug/state",
+            ],
+            steps=[100, 500, 1000, 2500, 5000],
             hold_seconds=60,
+            settle_seconds=3,
         )
     )

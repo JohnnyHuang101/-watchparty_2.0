@@ -35,17 +35,17 @@ const (
 )
 
 type RoomState struct {
-	LastVideoTime float64   `json:"last_video_time"`
-	LastAction    string    `json:"last_action"`
-	LastUpdatedBy string    `json:"last_updated_by"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	LastAction    string      `json:"last_action"`
+	LastUpdatedBy string      `json:"last_updated_by"`
+	Detail        interface{} `json:"detail"`
+	UpdatedAt     time.Time   `json:"updated_at"`
 }
 
 type HubAction struct {
 	Type     ActionType
 	Conn     *websocket.Conn
 	Msg      Message
-	RespChan chan RoomState // only populated for ActionGetState
+	RespChan chan []RoomState // only populated for ActionGetState
 }
 
 var upgrader = websocket.Upgrader{
@@ -53,9 +53,10 @@ var upgrader = websocket.Upgrader{
 }
 
 var (
-	hubChannel = make(chan HubAction, 1024)
-	nc         *nats.Conn
-	serverName string
+	hubChannel  = make(chan HubAction, 1024)
+	nc          *nats.Conn
+	serverName  string
+	roomHistory []RoomState
 )
 
 const NatsSubject = "watchparty.global"
@@ -102,7 +103,7 @@ func main() {
 
 	// Debug/inspection endpoint — safely reads hub-confined state via channel round-trip
 	http.HandleFunc("/debug/state", func(w http.ResponseWriter, r *http.Request) {
-		resp := make(chan RoomState)
+		resp := make(chan []RoomState)
 		hubChannel <- HubAction{Type: ActionGetState, RespChan: resp}
 		state := <-resp
 		w.Header().Set("Content-Type", "application/json")
@@ -131,7 +132,7 @@ func currentHubManager() {
 		switch action.Type {
 
 		case ActionGetState:
-			action.RespChan <- roomState // struct copy — safe to hand out
+			action.RespChan <- roomHistory // struct copy — safe to hand out
 
 		case ActionConnect:
 			clientName := randomName()
@@ -166,10 +167,32 @@ func currentHubManager() {
 		case ActionBroadcast:
 			// Update confined room state — safe because only this goroutine touches it,
 			// and this goroutine sees messages in the same order NATS delivered them.
-			roomState.LastVideoTime = action.Msg.VideoTime
 			roomState.LastAction = action.Msg.Type
 			roomState.LastUpdatedBy = action.Msg.Username
 			roomState.UpdatedAt = time.Now()
+
+			// Only stash the fields relevant to this message type, so a
+			// "chat" message can't stomp the last-known video position
+			// (and vice versa) the way a single shared field used to.
+			switch action.Msg.Type {
+			case "chat":
+				roomState.Detail = map[string]string{
+					"message": action.Msg.Content,
+				}
+			case "seek":
+				roomState.Detail = map[string]float64{
+					"video_time": action.Msg.VideoTime,
+				}
+			case "user_join", "user_leave":
+				roomState.Detail = map[string]string{
+					"content": action.Msg.Content,
+				}
+			default:
+				// Fallback: keep the raw message so nothing silently drops.
+				roomState.Detail = action.Msg
+			}
+
+			roomHistory = append(roomHistory, roomState)
 
 			for conn, client := range localClients {
 				outboundMsg := action.Msg
