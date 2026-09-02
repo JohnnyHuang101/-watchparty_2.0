@@ -41,34 +41,59 @@ services:
     networks:
       - watchparty-network
 
-  # --- Nginx Load Balancer Gateway ---
-  load-balancer:
-    image: nginx:alpine
-    container_name: watchparty-load-balancer
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    ports:
-      - "8080:80" # exposed to host — this is your real traffic entrypoint
-    depends_on:
-      - watchparty-node-1
-      - watchparty-node-2
-    networks:
-      - watchparty-network
+  # # --- Nginx Load Balancer Gateway ---
+  # load-balancer:
+  #   image: nginx:alpine
+  #   container_name: watchparty-load-balancer
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   ports:
+  #     - "8080:80" # exposed to host — this is your real traffic entrypoint
+  #   depends_on:
+  #     - watchparty-node-1
+  #     - watchparty-node-2
+  #   networks:
+  #     - watchparty-network
 
-  # --- Load tester ---
-  loadtester:
-    image: python:3.11-slim
-    container_name: loadtester
-    working_dir: /app
+  envoy:
+    image: envoyproxy/envoy:v1.31-latest
+    container_name: envoy
     volumes:
-      - ./swarm_test.py:/app/swarm_test.py
-    command: [ "sh", "-c", "pip install websockets aiohttp && python swarm_test.py" ]
-    depends_on:
-      - load-balancer
-      - watchparty-node-1
-      - watchparty-node-2
+      - ./observability-stack/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "8080:80"
+      - "9901:9901" # dev only
     networks:
       - watchparty-network
+    depends_on:
+      - watchparty-node-1
+      - watchparty-node-2
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "16686:16686"
+      - "9411:9411" # zipkins ingestion
+    networks:
+      - watchparty-network
+  # --- Load tester ---
+  # loadtester:
+  #   image: python:3.11-slim
+  #   container_name: loadtester
+  #   working_dir: /app
+  #   volumes:
+  #     - ./swarm_test.py:/app/swarm_test.py
+  #   command: [ "sh", "-c", "pip install websockets aiohttp && python swarm_test.py" ]
+  #   depends_on:
+  #     - load-balancer
+  #     - watchparty-node-1
+  #     - watchparty-node-2
+  #   networks:
+  #     - watchparty-network
 
 networks:
   watchparty-network:
