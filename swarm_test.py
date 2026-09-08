@@ -37,6 +37,7 @@ class LoadClient:
         self.pending = {}  # msg_id -> sent_at timestamp
         self.latencies = []  # list of floats (seconds)
         self.errors = 0
+        self.last_error = None
 
     async def run(self, duration_s):
         try:
@@ -60,6 +61,7 @@ class LoadClient:
         except Exception as e:
             print(f"[{self.username}] error: {e}")
             self.errors += 1
+            self.last_error = e
 
     async def _send_loop(self, ws, duration_s):
         end_time = time.monotonic() + duration_s
@@ -79,7 +81,7 @@ class LoadClient:
                     video_time=round(random.uniform(0, 3600), 2),
                 )
             )
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
 
         await ws.send(
             build_message(
@@ -216,6 +218,7 @@ async def swarm_test(
             "samples": len(all_latencies),
             "errors": total_errors,
             "error_rate": total_errors / n,
+            'last_error': [c.last_error for c in clients]
         }
 
         if all_latencies:
@@ -264,8 +267,8 @@ if __name__ == "__main__":
                 "http://watchparty-app-1:8080/debug/state",
                 "http://watchparty-app-2:8080/debug/state",
             ],
-            steps=[100, 500, 1000, 2500, 5000],
-            hold_seconds=60,
-            settle_seconds=3,
+            steps=[100, 500],
+            hold_seconds=5,
+            settle_seconds=1,
         )
     )
